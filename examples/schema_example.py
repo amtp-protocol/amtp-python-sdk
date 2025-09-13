@@ -21,7 +21,7 @@ async def basic_schema_validation_example():
     # Create a simple text message schema
     print("Creating text message schema...")
     text_schema = Schema(
-        id="myapp:message.text.v1",
+        id="agntcy:message.text.v1",
         name="Text Message",
         version="v1",
         description="Simple text message schema",
@@ -47,7 +47,7 @@ async def basic_schema_validation_example():
     # Create an order schema for this example
     print("\nCreating order schema...")
     order_schema = Schema(
-        id="myapp:commerce.order.v1",
+        id="agntcy:commerce.order.v1",
         name="E-commerce Order",
         version="v1",
         description="E-commerce order processing schema",
@@ -131,7 +131,7 @@ async def custom_schema_creation_example():
     
     # Create a user profile schema
     user_schema = Schema(
-        id="myapp:user.profile.v1",
+        id="agntcy:user.profile.v1",
         name="User Profile",
         version="v1",
         description="User profile information schema",
@@ -211,7 +211,7 @@ async def notification_schema_example():
     
     # Create notification schema
     notification_schema = Schema(
-        id="myapp:notification.system.v1",
+        id="agntcy:notification.system.v1",
         name="System Notification",
         version="v1",
         description="System-wide notification schema",
@@ -288,7 +288,7 @@ async def schema_messaging_example():
     
     # Create a task assignment schema
     task_schema = Schema(
-        id="myapp:task.assignment.v1",
+        id="agntcy:task.assignment.v1",
         name="Task Assignment",
         version="v1",
         description="Task assignment between agents",
@@ -423,7 +423,7 @@ async def schema_registry_example():
     
     # Base event schema
     event_schema = Schema(
-        id="myapp:event.base.v1",
+        id="agntcy:event.base.v1",
         name="Base Event",
         version="v1",
         description="Base schema for all events",
@@ -443,7 +443,7 @@ async def schema_registry_example():
     
     # User event schema (extends base)
     user_event_schema = Schema(
-        id="myapp:event.user.v1",
+        id="agntcy:event.user.v1",
         name="User Event",
         version="v1",
         description="User-related events",

@@ -154,7 +154,9 @@ class AMTP:
             return
         
         try:
-            await self._request("DELETE", f"/v1/admin/agents/{self.address}")
+            # Extract agent name from full address (e.g., "manager@localhost" -> "manager")
+            agent_name = self.address.split('@')[0] if '@' in self.address else self.address
+            await self._request("DELETE", f"/v1/admin/agents/{agent_name}")
             self._registered = False
             self.logger.info("Unregistered from gateway")
         except Exception as e:
