@@ -9,6 +9,9 @@ import re
 from typing import Dict, Any, Optional, List, ClassVar
 from dataclasses import dataclass, field
 
+import jsonschema
+from jsonschema import Draft7Validator, ValidationError as JsonSchemaValidationError
+
 from .error import Error
 
 
@@ -53,19 +56,21 @@ class Schema:
         if not isinstance(self.schema_def, dict):
             raise Error("Schema definition must be a dictionary")
         
-        # Basic JSON Schema validation
+        # Validate that this is a proper JSON Schema using Draft7Validator
+        try:
+            Draft7Validator.check_schema(self.schema_def)
+        except JsonSchemaValidationError as e:
+            raise Error(f"Invalid JSON Schema definition: {e.message}")
+        except Exception as e:
+            raise Error(f"Schema definition validation failed: {e}")
+        
+        # Basic requirement - must have a type field
         if "type" not in self.schema_def:
             raise Error("Schema definition must have a 'type' field")
-        
-        # Ensure it's a valid JSON Schema structure
-        required_fields = ["type"]
-        for field in required_fields:
-            if field not in self.schema_def:
-                raise Error(f"Schema definition missing required field: {field}")
     
     def validate_message(self, payload: Dict[str, Any]) -> bool:
         """
-        Validate a message payload against this schema.
+        Validate a message payload against this schema using JSON Schema validation.
         
         Args:
             payload: Message payload to validate
@@ -77,57 +82,59 @@ class Schema:
             Error: If validation fails
         """
         try:
-            # Simple validation - in a real implementation, you'd use jsonschema library
-            return self._validate_against_schema(payload, self.schema_def)
+            # Create validator instance for this schema
+            validator = Draft7Validator(self.schema_def)
+            
+            # Validate the payload
+            validator.validate(payload)
+            
+            return True
+            
+        except JsonSchemaValidationError as e:
+            # Format the validation error message nicely
+            error_path = " -> ".join(str(p) for p in e.absolute_path) if e.absolute_path else "root"
+            raise Error(f"Schema validation failed at {error_path}: {e.message}")
         except Exception as e:
             raise Error(f"Schema validation failed: {e}")
     
-    def _validate_against_schema(self, data: Any, schema: Dict[str, Any]) -> bool:
-        """Basic schema validation (simplified)."""
-        schema_type = schema.get("type")
+    def validate_message_detailed(self, payload: Dict[str, Any]) -> List[str]:
+        """
+        Validate a message payload and return detailed error information.
         
-        if schema_type == "object":
-            if not isinstance(data, dict):
-                raise Error(f"Expected object, got {type(data).__name__}")
+        Args:
+            payload: Message payload to validate
             
-            # Check required properties
-            required = schema.get("required", [])
-            for prop in required:
-                if prop not in data:
-                    raise Error(f"Missing required property: {prop}")
+        Returns:
+            List[str]: List of validation error messages (empty if valid)
+        """
+        try:
+            validator = Draft7Validator(self.schema_def)
+            errors = []
             
-            # Validate properties
-            properties = schema.get("properties", {})
-            for prop, value in data.items():
-                if prop in properties:
-                    self._validate_against_schema(value, properties[prop])
-        
-        elif schema_type == "array":
-            if not isinstance(data, list):
-                raise Error(f"Expected array, got {type(data).__name__}")
+            for error in validator.iter_errors(payload):
+                error_path = " -> ".join(str(p) for p in error.absolute_path) if error.absolute_path else "root"
+                errors.append(f"At {error_path}: {error.message}")
             
-            items_schema = schema.get("items")
-            if items_schema:
-                for item in data:
-                    self._validate_against_schema(item, items_schema)
+            return errors
+            
+        except Exception as e:
+            return [f"Validation error: {e}"]
+    
+    def is_valid(self, payload: Dict[str, Any]) -> bool:
+        """
+        Check if a payload is valid without raising exceptions.
         
-        elif schema_type == "string":
-            if not isinstance(data, str):
-                raise Error(f"Expected string, got {type(data).__name__}")
-        
-        elif schema_type == "number":
-            if not isinstance(data, (int, float)):
-                raise Error(f"Expected number, got {type(data).__name__}")
-        
-        elif schema_type == "integer":
-            if not isinstance(data, int):
-                raise Error(f"Expected integer, got {type(data).__name__}")
-        
-        elif schema_type == "boolean":
-            if not isinstance(data, bool):
-                raise Error(f"Expected boolean, got {type(data).__name__}")
-        
-        return True
+        Args:
+            payload: Message payload to validate
+            
+        Returns:
+            bool: True if valid, False otherwise
+        """
+        try:
+            self.validate_message(payload)
+            return True
+        except Error:
+            return False
     
     def register(self):
         """Register this schema in the global registry."""
@@ -163,6 +170,47 @@ class Schema:
             raise Error(f"Schema not found: {schema_id}")
         
         return schema.validate_message(payload)
+    
+    @classmethod
+    def validate_payload_detailed(cls, schema_id: str, payload: Dict[str, Any]) -> List[str]:
+        """
+        Validate a payload against a registered schema and return detailed errors.
+        
+        Args:
+            schema_id: Schema ID to validate against
+            payload: Payload to validate
+            
+        Returns:
+            List[str]: List of validation error messages (empty if valid)
+            
+        Raises:
+            Error: If schema not found
+        """
+        schema = cls.get(schema_id)
+        if not schema:
+            raise Error(f"Schema not found: {schema_id}")
+        
+        return schema.validate_message_detailed(payload)
+    
+    @classmethod
+    def is_payload_valid(cls, schema_id: str, payload: Dict[str, Any]) -> bool:
+        """
+        Check if a payload is valid against a registered schema without raising exceptions.
+        
+        Args:
+            schema_id: Schema ID to validate against
+            payload: Payload to validate
+            
+        Returns:
+            bool: True if valid, False otherwise (including if schema not found)
+        """
+        try:
+            schema = cls.get(schema_id)
+            if not schema:
+                return False
+            return schema.is_valid(payload)
+        except Exception:
+            return False
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Schema':
