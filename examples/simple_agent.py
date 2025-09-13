@@ -22,12 +22,15 @@ async def main():
     )
     
     # Create AMTP connection
+    # Example: Agent that only supports text message and notification schemas
     amtp = AMTP(
         address="simple-agent",
         gateway_url="http://localhost:8080",
         delivery_mode="pull",
         tls_enabled=False,
-        log_level="INFO"
+        log_level="INFO",
+        # Optional: Specify which schema patterns this agent supports
+        # supported_schemas=["agntcy:message.text.*", "agntcy:notification.*"]
     )
     
     # Message counter
@@ -41,6 +44,17 @@ async def main():
         
         print(f"Received message #{message_count} from {message.sender}")
         print(f"Subject: {message.subject}")
+        
+        # Check if this agent supports the message schema
+        if message.schema:
+            print(f"Schema: {message.schema}")
+            if not amtp.supports_schema(message.schema):
+                print(f"⚠️  Warning: This agent doesn't support schema {message.schema}")
+                return {
+                    "status": "unsupported_schema",
+                    "message": f"This agent doesn't support schema {message.schema}",
+                    "supported_schemas": amtp.get_supported_schemas()
+                }
         
         if message.payload:
             print(f"Payload: {message.payload}")

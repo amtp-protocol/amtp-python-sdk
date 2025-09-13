@@ -10,6 +10,7 @@ import aiohttp
 import json
 import logging
 import ssl
+import fnmatch
 from typing import Optional, Dict, Any, List, Callable, Awaitable
 from datetime import datetime
 from urllib.parse import urljoin
@@ -37,6 +38,7 @@ class AMTP:
                  delivery_mode: str = "pull",
                  api_key: Optional[str] = None,
                  tls_enabled: bool = True,
+                 supported_schemas: Optional[List[str]] = None,
                  **kwargs):
         """
         Initialize AMTP connection.
@@ -47,6 +49,7 @@ class AMTP:
             delivery_mode: "pull" or "push"
             api_key: API key for authentication
             tls_enabled: Enable TLS/SSL
+            supported_schemas: List of schema patterns this agent supports (e.g., ["agntcy:commerce.*", "agntcy:finance.payment.*"])
             **kwargs: Additional configuration options
         """
         self.address = address
@@ -54,6 +57,7 @@ class AMTP:
         self.delivery_mode = delivery_mode
         self.api_key = api_key
         self.tls_enabled = tls_enabled
+        self.supported_schemas = supported_schemas or []
         
         # Configuration
         self.config = {
@@ -125,6 +129,10 @@ class AMTP:
             "address": self.address,
             "delivery_mode": self.delivery_mode
         }
+        
+        # Include supported schemas if provided
+        if self.supported_schemas:
+            data["supported_schemas"] = self.supported_schemas
         
         try:
             response = await self._request("POST", "/v1/admin/agents", data)            
@@ -257,6 +265,36 @@ class AMTP:
             self.logger.debug(f"Message {message_id} acknowledged")
         except Exception as e:
             raise Error(f"Failed to acknowledge message: {e}")
+    
+    def supports_schema(self, schema_id: str) -> bool:
+        """
+        Check if this agent supports a specific schema.
+        
+        Args:
+            schema_id: Schema ID to check (e.g., "agntcy:commerce.order.v1")
+            
+        Returns:
+            bool: True if the agent supports this schema
+        """
+        if not self.supported_schemas:
+            # If no supported schemas specified, assume agent supports all schemas
+            return True
+        
+        # Check if schema matches any of the supported patterns
+        for pattern in self.supported_schemas:
+            if fnmatch.fnmatch(schema_id, pattern):
+                return True
+        
+        return False
+    
+    def get_supported_schemas(self) -> List[str]:
+        """
+        Get the list of supported schema patterns.
+        
+        Returns:
+            List[str]: List of schema patterns this agent supports
+        """
+        return self.supported_schemas.copy()
     
     def on_message(self, handler: Callable[[Message], Awaitable[Optional[Dict[str, Any]]]]):
         """
